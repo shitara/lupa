@@ -1464,8 +1464,11 @@ cdef int py_object_str(lua_State* L) nogil:
 #   using the getitem method of access.
 
 cdef int getitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n) except -1:
-    return py_to_lua(runtime, L,
-                     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
+    try:
+        return py_to_lua(runtime, L,
+                         (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
+    except AttributeError as e:
+        return None
 
 cdef int setitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n, int value_n) except -1:
     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ] = py_from_lua(runtime, L, value_n)
