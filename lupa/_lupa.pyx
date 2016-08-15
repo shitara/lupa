@@ -1464,27 +1464,27 @@ cdef int py_object_str(lua_State* L) nogil:
 #   using the getitem method of access.
 
 cdef int getitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n) except -1:
-    try:
-        return py_to_lua(runtime, L,
-                         (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
-    except AttributeError as e:
-        return None
+    return py_to_lua(runtime, L,
+                     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
 
 cdef int setitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n, int value_n) except -1:
     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ] = py_from_lua(runtime, L, value_n)
     return 0
 
 cdef int getattr_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n) except -1:
-    obj = <object>py_obj.obj
-    attr_name = py_from_lua(runtime, L, key_n)
-    if runtime._attribute_getter is not None:
-        value = runtime._attribute_getter(obj, attr_name)
-        return py_to_lua(runtime, L, value)
-    if runtime._attribute_filter is not None:
-        attr_name = runtime._attribute_filter(obj, attr_name, False)
-    if isinstance(attr_name, bytes):
-        attr_name = (<bytes>attr_name).decode(runtime._source_encoding)
-    return py_to_lua(runtime, L, getattr(obj, attr_name))
+    try:
+        obj = <object>py_obj.obj
+        attr_name = py_from_lua(runtime, L, key_n)
+        if runtime._attribute_getter is not None:
+            value = runtime._attribute_getter(obj, attr_name)
+            return py_to_lua(runtime, L, value)
+        if runtime._attribute_filter is not None:
+            attr_name = runtime._attribute_filter(obj, attr_name, False)
+        if isinstance(attr_name, bytes):
+            attr_name = (<bytes>attr_name).decode(runtime._source_encoding)
+        return py_to_lua(runtime, L, getattr(obj, attr_name))
+    except AttributeError as e:
+        return None
 
 cdef int setattr_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n, int value_n) except -1:
     obj = <object>py_obj.obj
