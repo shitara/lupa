@@ -1360,40 +1360,43 @@ cdef bint call_python(LuaRuntime runtime, lua_State *L, py_object* py_obj) excep
     cdef int i, nargs = lua.lua_gettop(L) - 1
     cdef tuple args
 
-    if not py_obj:
-        raise TypeError("not a python object")
+    try:
+        if not py_obj:
+            raise TypeError("not a python object")
 
-    f = <object>py_obj.obj
+        f = <object>py_obj.obj
 
-    if not nargs:
-        lua.lua_settop(L, 0)  # FIXME
-        result = f()
-    else:
-        arg = py_from_lua(runtime, L, 2)
+        if not nargs:
+            lua.lua_settop(L, 0)  # FIXME
+            result = f()
+        else:
+            arg = py_from_lua(runtime, L, 2)
 
-        if PyMethod_Check(f) and (<PyObject*>arg) is PyMethod_GET_SELF(f):
-            # Calling a bound method and self is already the first argument.
-            # Lua x:m(a, b) => Python as x.m(x, a, b) but should be x.m(a, b)
-            #
-            # Lua syntax is sensitive to method calls vs function lookups, while
-            # Python's syntax is not.  In a way, we are leaking Python semantics
-            # into Lua by duplicating the first argument from method calls.
-            #
-            # The method wrapper would only prepend self to the tuple again,
-            # so we just call the underlying function directly instead.
-            f = <object>PyMethod_GET_FUNCTION(f)
+            if PyMethod_Check(f) and (<PyObject*>arg) is PyMethod_GET_SELF(f):
+                # Calling a bound method and self is already the first argument.
+                # Lua x:m(a, b) => Python as x.m(x, a, b) but should be x.m(a, b)
+                #
+                # Lua syntax is sensitive to method calls vs function lookups, while
+                # Python's syntax is not.  In a way, we are leaking Python semantics
+                # into Lua by duplicating the first argument from method calls.
+                #
+                # The method wrapper would only prepend self to the tuple again,
+                # so we just call the underlying function directly instead.
+                f = <object>PyMethod_GET_FUNCTION(f)
 
-        args = cpython.tuple.PyTuple_New(nargs)
-        cpython.ref.Py_INCREF(arg)
-        cpython.tuple.PyTuple_SET_ITEM(args, 0, arg)
-
-        for i in range(1, nargs):
-            arg = py_from_lua(runtime, L, i+2)
+            args = cpython.tuple.PyTuple_New(nargs)
             cpython.ref.Py_INCREF(arg)
-            cpython.tuple.PyTuple_SET_ITEM(args, i, arg)
+            cpython.tuple.PyTuple_SET_ITEM(args, 0, arg)
 
-        lua.lua_settop(L, 0)  # FIXME
-        result = f(*args)
+            for i in range(1, nargs):
+                arg = py_from_lua(runtime, L, i+2)
+                cpython.ref.Py_INCREF(arg)
+                cpython.tuple.PyTuple_SET_ITEM(args, i, arg)
+
+            lua.lua_settop(L, 0)  # FIXME
+            result = f(*args)
+    except Exception as e:
+        result = (None, e)
 
     return py_function_result_to_lua(runtime, L, result)
 
@@ -1464,8 +1467,11 @@ cdef int py_object_str(lua_State* L) nogil:
 #   using the getitem method of access.
 
 cdef int getitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n) except -1:
-    return py_to_lua(runtime, L,
-                     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
+    try:
+        return py_to_lua(runtime, L,
+                         (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ])
+    except:
+        return 0
 
 cdef int setitem_for_lua(LuaRuntime runtime, lua_State* L, py_object* py_obj, int key_n, int value_n) except -1:
     (<object>py_obj.obj)[ py_from_lua(runtime, L, key_n) ] = py_from_lua(runtime, L, value_n)
