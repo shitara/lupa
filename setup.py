@@ -10,7 +10,7 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
-VERSION = '1.2'
+VERSION = '1.3'
 
 extra_setup_args = {}
 
@@ -248,8 +248,8 @@ if config.get('libfile'):
 setup(
     name="lupa",
     version=VERSION,
-    author="Stefan Behnel",
-    author_email="stefan_ml@behnel.de",
+    author="Naonobu Shitara",
+    author_email="naonobu_shitara@gameciste.com",
     maintainer="Lupa-dev mailing list",
     maintainer_email="lupa-dev@freelists.org",
     url="https://github.com/scoder/lupa",
