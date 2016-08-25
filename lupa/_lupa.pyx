@@ -47,7 +47,7 @@ except ImportError:
     import builtins
 
 DEF POBJECT = b"POBJECT" # as used by LunaticPython
-cdef int PY2 = PY_MAJOR_VERSION == 2
+cdef int IS_PY2 = PY_MAJOR_VERSION == 2
 
 cdef enum WrappedObjectFlags:
     # flags that determine the behaviour of a wrapped object:
@@ -102,7 +102,7 @@ def lua_type(obj):
             return 'userdata'
         else:
             lua_type_name = lua.lua_typename(L, ltype)
-            return lua_type_name if PY2 else lua_type_name.decode('ascii')
+            return lua_type_name if IS_PY2 else lua_type_name.decode('ascii')
     finally:
         lua.lua_settop(L, old_top)
         unlock_runtime(lua_object._runtime)
@@ -450,7 +450,7 @@ cdef tuple _fix_args_kwargs(tuple args):
 
     # arguments with non-integer keys are passed as named
     new_kwargs = {
-        (<bytes>key).decode(encoding) if not PY2 and isinstance(key, bytes) else key: value
+        (<bytes>key).decode(encoding) if not IS_PY2 and isinstance(key, bytes) else key: value
         for key, value in _LuaIter(table, ITEMS)
         if not isinstance(key, (int, long))
     }
@@ -1138,7 +1138,7 @@ cdef int py_to_lua(LuaRuntime runtime, lua_State *L, object o, bint wrap_none=Fa
     elif isinstance(o, long):
         lua.lua_pushnumber(L, <lua.lua_Number>cpython.long.PyLong_AsDouble(o))
         pushed_values_count = 1
-    elif PY2 and isinstance(o, int):
+    elif IS_PY2 and isinstance(o, int):
         lua.lua_pushnumber(L, <lua.lua_Number><long>o)
         pushed_values_count = 1
     elif isinstance(o, bytes):
@@ -1360,43 +1360,40 @@ cdef bint call_python(LuaRuntime runtime, lua_State *L, py_object* py_obj) excep
     cdef int i, nargs = lua.lua_gettop(L) - 1
     cdef tuple args
 
-    try:
-        if not py_obj:
-            raise TypeError("not a python object")
+    if not py_obj:
+        raise TypeError("not a python object")
 
-        f = <object>py_obj.obj
+    f = <object>py_obj.obj
 
-        if not nargs:
-            lua.lua_settop(L, 0)  # FIXME
-            result = f()
-        else:
-            arg = py_from_lua(runtime, L, 2)
+    if not nargs:
+        lua.lua_settop(L, 0)  # FIXME
+        result = f()
+    else:
+        arg = py_from_lua(runtime, L, 2)
 
-            if PyMethod_Check(f) and (<PyObject*>arg) is PyMethod_GET_SELF(f):
-                # Calling a bound method and self is already the first argument.
-                # Lua x:m(a, b) => Python as x.m(x, a, b) but should be x.m(a, b)
-                #
-                # Lua syntax is sensitive to method calls vs function lookups, while
-                # Python's syntax is not.  In a way, we are leaking Python semantics
-                # into Lua by duplicating the first argument from method calls.
-                #
-                # The method wrapper would only prepend self to the tuple again,
-                # so we just call the underlying function directly instead.
-                f = <object>PyMethod_GET_FUNCTION(f)
+        if PyMethod_Check(f) and (<PyObject*>arg) is PyMethod_GET_SELF(f):
+            # Calling a bound method and self is already the first argument.
+            # Lua x:m(a, b) => Python as x.m(x, a, b) but should be x.m(a, b)
+            #
+            # Lua syntax is sensitive to method calls vs function lookups, while
+            # Python's syntax is not.  In a way, we are leaking Python semantics
+            # into Lua by duplicating the first argument from method calls.
+            #
+            # The method wrapper would only prepend self to the tuple again,
+            # so we just call the underlying function directly instead.
+            f = <object>PyMethod_GET_FUNCTION(f)
 
-            args = cpython.tuple.PyTuple_New(nargs)
+        args = cpython.tuple.PyTuple_New(nargs)
+        cpython.ref.Py_INCREF(arg)
+        cpython.tuple.PyTuple_SET_ITEM(args, 0, arg)
+
+        for i in range(1, nargs):
+            arg = py_from_lua(runtime, L, i+2)
             cpython.ref.Py_INCREF(arg)
-            cpython.tuple.PyTuple_SET_ITEM(args, 0, arg)
+            cpython.tuple.PyTuple_SET_ITEM(args, i, arg)
 
-            for i in range(1, nargs):
-                arg = py_from_lua(runtime, L, i+2)
-                cpython.ref.Py_INCREF(arg)
-                cpython.tuple.PyTuple_SET_ITEM(args, i, arg)
-
-            lua.lua_settop(L, 0)  # FIXME
-            result = f(*args)
-    except Exception as e:
-        result = (None, e)
+        lua.lua_settop(L, 0)  # FIXME
+        result = f(*args)
 
     return py_function_result_to_lua(runtime, L, result)
 
@@ -1505,11 +1502,10 @@ cdef int py_object_getindex_with_gil(lua_State* L, py_object* py_obj) with gil:
     cdef LuaRuntime runtime
     try:
         runtime = <LuaRuntime?>py_obj.runtime
-        return getattr_for_lua(runtime, L, py_obj, 2)
-        # if (py_obj.type_flags & OBJ_AS_INDEX) and not runtime._attribute_getter and False:
-        #     return getitem_for_lua(runtime, L, py_obj, 2)
-        # else:
-        #     return getattr_for_lua(runtime, L, py_obj, 2)
+        if (py_obj.type_flags & OBJ_AS_INDEX) and not runtime._attribute_getter:
+            return getitem_for_lua(runtime, L, py_obj, 2)
+        else:
+            return getattr_for_lua(runtime, L, py_obj, 2)
     except:
         try: runtime.store_raised_exception()
         finally: return -1
