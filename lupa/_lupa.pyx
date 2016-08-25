@@ -1508,10 +1508,11 @@ cdef int py_object_getindex_with_gil(lua_State* L, py_object* py_obj) with gil:
     cdef LuaRuntime runtime
     try:
         runtime = <LuaRuntime?>py_obj.runtime
-        if (py_obj.type_flags & OBJ_AS_INDEX) and not runtime._attribute_getter and False:
-            return getitem_for_lua(runtime, L, py_obj, 2)
-        else:
-            return getattr_for_lua(runtime, L, py_obj, 2)
+        return getattr_for_lua(runtime, L, py_obj, 2)
+        # if (py_obj.type_flags & OBJ_AS_INDEX) and not runtime._attribute_getter and False:
+        #     return getitem_for_lua(runtime, L, py_obj, 2)
+        # else:
+        #     return getattr_for_lua(runtime, L, py_obj, 2)
     except:
         try: runtime.store_raised_exception()
         finally: return -1
