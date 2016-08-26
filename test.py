@@ -1,24 +1,39 @@
 
 import lupa
 
-def error():
-    raise Exception('er')
+from mongoengine.document import Document
+from mongoengine import fields, connect, Q
 
-class Test:
+connect('test', host='192.168.33.2')
 
-    def __get_item__(self, a):
-        return None
+class Test(Document):
+    name = fields.StringField()
+    def __unicode__(self):
+        return self.name
+class Query(Q):
 
-    @classmethod
-    def t(cls, msg):
-        raise Exception('aa')
+    def __init__(self, kwargs):
+        super().__init__(**kwargs)
 
+    def and_(self, q):
+        return self & q
+
+    def or_(self, q):
+        return self | q
 
 lua = lupa.LuaRuntime(unpack_returned_tuples=True)
 
+q = Query(dict(
+    name = 'kato yamada',
+    )).or_(Query(dict(
+        name = 'taro yamada',
+        )))
+
 
 lua.globals()['test'] = Test
-lua.eval("(function() print(('%s'):format('aaa')) end)()")
-
+lua.globals()['Q'] = Query
+lua.eval("(function() q = Q({ name = 'kato yamada' }).or_(Q({ name = 'taro yamada' })) end)()")
+lua.eval("(function() v,e = test.objects.filter(q) end)()")
+lua.eval('print(v)')
 
 
