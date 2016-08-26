@@ -9,7 +9,7 @@ MANIFEST
 *.egg-info
 *.so
 lupa/version.py
-test.py
+./test.py
 
 # Vim swapfiles
 *.swp
