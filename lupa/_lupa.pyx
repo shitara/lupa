@@ -1398,7 +1398,21 @@ cdef bint call_python(LuaRuntime runtime, lua_State *L, py_object* py_obj) excep
                 cpython.tuple.PyTuple_SET_ITEM(args, i, arg)
 
             lua.lua_settop(L, 0)  # FIXME
+
             result = f(*args)
+            if isinstance(result, dict):
+                result = type('', (result.__class__,), dict(
+                    map    = lambda s,c: { k:c(v, k) for k,v in s.items() },
+                    each   = lambda s,c: { k:c(v, k) for k,v in s.items() },
+                    filter = lambda s,c: { k:v for k,v in s.items() if c(v, k) },
+                ))(result)
+            elif isinstance(result, list):
+                result =  type('', (result.__class__,), dict(
+                    __init__ = lambda s,o: super(s.__class__, s).__init__(isinstance(o, dict) and o.values() or o),
+                    map      = lambda s,c: [ c(v, i) for i,v in enumerate(s) ],
+                    each     = lambda s,c: [ c(v, i) for i,v in enumerate(s) ],
+                    filter   = lambda s,c: [ v for i,v in enumerate(s) if c(v, i) ],
+                ))(result)
     except Exception as e:
         result = (None, e)
 
